@@ -1632,21 +1632,6 @@ export class DLMM {
     const promiseResults = await Promise.all([
       this.getActiveBin(),
       userPubKey &&
-        this.program.account.position.all([
-          {
-            memcmp: {
-              bytes: bs58.encode(userPubKey.toBuffer()),
-              offset: 8 + 32,
-            },
-          },
-          {
-            memcmp: {
-              bytes: bs58.encode(this.pubkey.toBuffer()),
-              offset: 8,
-            },
-          },
-        ]),
-      userPubKey &&
         this.program.account.positionV2.all([
           {
             memcmp: {
@@ -1663,7 +1648,7 @@ export class DLMM {
         ]),
     ]);
 
-    const [activeBin, positions, positionsV2] = promiseResults;
+    const [activeBin, positionsV2] = promiseResults;
 
     if (!activeBin) {
       throw new Error("Error fetching active bin");
@@ -1676,28 +1661,12 @@ export class DLMM {
       };
     }
 
-    if (!positions || !positionsV2) {
+    if (!positionsV2) {
       throw new Error("Error fetching positions");
     }
 
     const binArrayPubkeySet = new Set<string>();
-    positions.forEach(({ account: { upperBinId, lowerBinId } }) => {
-      const lowerBinArrayIndex = binIdToBinArrayIndex(new BN(lowerBinId));
-      const upperBinArrayIndex = binIdToBinArrayIndex(new BN(upperBinId));
 
-      const [lowerBinArrayPubKey] = deriveBinArray(
-        this.pubkey,
-        lowerBinArrayIndex,
-        this.program.programId
-      );
-      const [upperBinArrayPubKey] = deriveBinArray(
-        this.pubkey,
-        upperBinArrayIndex,
-        this.program.programId
-      );
-      binArrayPubkeySet.add(lowerBinArrayPubKey.toBase58());
-      binArrayPubkeySet.add(upperBinArrayPubKey.toBase58());
-    });
     const binArrayPubkeyArray = Array.from(binArrayPubkeySet).map(
       (pubkey) => new PublicKey(pubkey)
     );
@@ -1774,47 +1743,6 @@ export class DLMM {
     const onChainTimestamp = new BN(
       clockAccInfo.data.readBigInt64LE(32).toString()
     ).toNumber();
-    const userPositions = await Promise.all(
-      positions.map(async ({ publicKey, account }) => {
-        const { lowerBinId, upperBinId } = account;
-        const lowerBinArrayIndex = binIdToBinArrayIndex(new BN(lowerBinId));
-        const upperBinArrayIndex = binIdToBinArrayIndex(new BN(upperBinId));
-
-        const [lowerBinArrayPubKey] = deriveBinArray(
-          this.pubkey,
-          lowerBinArrayIndex,
-          this.program.programId
-        );
-        const [upperBinArrayPubKey] = deriveBinArray(
-          this.pubkey,
-          upperBinArrayIndex,
-          this.program.programId
-        );
-        const lowerBinArray = positionBinArraysMap.get(
-          lowerBinArrayPubKey.toBase58()
-        );
-        const upperBinArray = positionBinArraysMap.get(
-          upperBinArrayPubKey.toBase58()
-        );
-        return {
-          publicKey,
-          positionData: await DLMM.processPosition(
-            this.program,
-            PositionVersion.V1,
-            this.lbPair,
-            onChainTimestamp,
-            account,
-            this.tokenX.decimal,
-            this.tokenY.decimal,
-            lowerBinArray,
-            upperBinArray,
-            PublicKey.default
-          ),
-          version: PositionVersion.V1,
-        };
-      })
-    );
-
     const userPositionsV2 = await Promise.all(
       positionsV2.map(async ({ publicKey, account }) => {
         const { lowerBinId, upperBinId, feeOwner } = account;
@@ -1858,7 +1786,148 @@ export class DLMM {
 
     return {
       activeBin,
-      userPositions: [...userPositions, ...userPositionsV2],
+      userPositions: [...userPositionsV2],
+    };
+  }
+
+  /**
+   * The function `getPositionsByUserAndLbPair` retrieves positions by user and LB pair, including
+   * active bin and user positions.
+   * @param {PublicKey} [userPubKey] - The `userPubKey` parameter is an optional parameter of type
+   * `PublicKey`. It represents the public key of a user. If no `userPubKey` is provided, the function
+   * will return an object with an empty `userPositions` array and the active bin information obtained
+   * from the `getActive
+   * @returns The function `getPositionsByUserAndLbPair` returns a Promise that resolves to an object
+   * with two properties:
+   *    - "activeBin" which is an object with two properties: "binId" and "price". The value of "binId"
+   *     is the active bin ID of the lbPair, and the value of "price" is the price of the active bin.
+   *   - "userPositions" which is an array of Position objects.
+   */
+  public async getPositionByLbPairAndPositionPubkey(
+    positionPubkey?: PublicKey
+  ): Promise<{
+    activeBin: BinLiquidity;
+    userPositions: Array<LbPosition>;
+  }> {
+    const promiseResults = await Promise.all([
+      this.getActiveBin(),
+      positionPubkey && this.program.account.positionV2.fetch(positionPubkey),
+    ]);
+
+    const [activeBin, positionV2] = promiseResults;
+
+    if (!activeBin) {
+      throw new Error("Error fetching active bin");
+    }
+
+    if (!positionPubkey) {
+      return {
+        activeBin,
+        userPositions: [],
+      };
+    }
+
+    if (!positionV2) {
+      throw new Error("Error fetching positions");
+    }
+
+    const positionsV2 = [positionV2];
+
+    const binArrayPubkeySetV2 = new Set<string>();
+    positionsV2.forEach(({ upperBinId, lowerBinId, lbPair }) => {
+      const lowerBinArrayIndex = binIdToBinArrayIndex(new BN(lowerBinId));
+      const upperBinArrayIndex = binIdToBinArrayIndex(new BN(upperBinId));
+
+      const [lowerBinArrayPubKey] = deriveBinArray(
+        this.pubkey,
+        lowerBinArrayIndex,
+        this.program.programId
+      );
+      const [upperBinArrayPubKey] = deriveBinArray(
+        this.pubkey,
+        upperBinArrayIndex,
+        this.program.programId
+      );
+      binArrayPubkeySetV2.add(lowerBinArrayPubKey.toBase58());
+      binArrayPubkeySetV2.add(upperBinArrayPubKey.toBase58());
+    });
+    const binArrayPubkeyArrayV2 = Array.from(binArrayPubkeySetV2).map(
+      (pubkey) => new PublicKey(pubkey)
+    );
+
+    const lbPairAndBinArrays = await chunkedGetMultipleAccountInfos(
+      this.program.provider.connection,
+      [this.pubkey, SYSVAR_CLOCK_PUBKEY, ...binArrayPubkeyArrayV2]
+    );
+
+    const [lbPairAccInfo, clockAccInfo, ...binArraysAccInfo] =
+      lbPairAndBinArrays;
+
+    const positionBinArraysMapV2 = new Map();
+    for (let i = 0; i < binArraysAccInfo.length; i++) {
+      const binArrayPubkey = binArrayPubkeyArrayV2[i];
+      const binArrayAccBufferV2 = binArraysAccInfo[i];
+      if (!binArrayAccBufferV2)
+        throw new Error(
+          `Bin Array account ${binArrayPubkey.toBase58()} not found`
+        );
+      const binArrayAccInfo = this.program.coder.accounts.decode(
+        "binArray",
+        binArrayAccBufferV2.data
+      );
+      positionBinArraysMapV2.set(binArrayPubkey.toBase58(), binArrayAccInfo);
+    }
+
+    if (!lbPairAccInfo)
+      throw new Error(`LB Pair account ${this.pubkey.toBase58()} not found`);
+
+    const onChainTimestamp = new BN(
+      clockAccInfo.data.readBigInt64LE(32).toString()
+    ).toNumber();
+    const userPositionsV2 = await Promise.all(
+      positionsV2.map(async (account) => {
+        const { lowerBinId, upperBinId, feeOwner } = account;
+        const lowerBinArrayIndex = binIdToBinArrayIndex(new BN(lowerBinId));
+        const upperBinArrayIndex = binIdToBinArrayIndex(new BN(upperBinId));
+
+        const [lowerBinArrayPubKey] = deriveBinArray(
+          this.pubkey,
+          lowerBinArrayIndex,
+          this.program.programId
+        );
+        const [upperBinArrayPubKey] = deriveBinArray(
+          this.pubkey,
+          upperBinArrayIndex,
+          this.program.programId
+        );
+        const lowerBinArray = positionBinArraysMapV2.get(
+          lowerBinArrayPubKey.toBase58()
+        );
+        const upperBinArray = positionBinArraysMapV2.get(
+          upperBinArrayPubKey.toBase58()
+        );
+        return {
+          publicKey: positionPubkey,
+          positionData: await DLMM.processPosition(
+            this.program,
+            PositionVersion.V2,
+            this.lbPair,
+            onChainTimestamp,
+            account,
+            this.tokenX.decimal,
+            this.tokenY.decimal,
+            lowerBinArray,
+            upperBinArray,
+            feeOwner
+          ),
+          version: PositionVersion.V2,
+        };
+      })
+    );
+
+    return {
+      activeBin,
+      userPositions: [...userPositionsV2],
     };
   }
 
