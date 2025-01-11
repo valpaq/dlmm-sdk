@@ -19,6 +19,142 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## @meteora-ag/dlmm [1.3.8] - PR #144
+
+### Fixed
+
+- Fix `getOrCreateATAInstruction` to use `createAssociatedTokenAccountIdempotentInstruction` 
+
+## @meteora-ag/dlmm [1.3.7] - PR #143
+
+### Fixed
+
+- Fix `swapQuote` end price
+
+## @meteora-ag/dlmm [1.3.6] - PR #116
+
+### Changed
+
+- Refactored; remove `position(V1)` interaction from SDK
+- Throw error in `removeLiquidity` function if position doesn't have any liquidity 
+
+### Fixed
+
+- Removed unused rpc call in `swap`
+
+### Added
+
+- Function `getPosition` to retrieve a single position data
+
+## @meteora-ag/dlmm [1.3.5] - PR #136
+
+### Fixed
+
+- Fixed the `getBins` method to handle the corner case when no bin arrays created for the requested bin ids.
+
+## @meteora-ag/dlmm [1.3.4] - PR #127
+
+### Changed
+
+- Use estimated compute unit instead of 1.4m compute unit for instructions.
+
+## @meteora-ag/dlmm [1.3.3] - PR #133
+
+### Changed
+
+- Update parameters for `ts-client` function `seedLiquiditySingleBin`
+
+## @meteora-ag/dlmm [1.3.2] - PR #134
+
+### Changed
+
+- Close wrap SOL ATA when SOL is swap in direction.
+
+## lb_clmm [0.8.2] - PR #115
+
+### Added
+
+- Add a new endpoint `initialize_customizable_permissionless_lb_pair`, that allows pool creator to be able to create pool with input `active_id`, `bin_step`, `base_factor`, `activation_point` and `alpha-vault`
+
+### Changed
+
+- Add a new PairType `CustomizablePermissionless`, that is set by using the new endpoint above.
+
+- Remove `whitelisted_wallet` and `lock_duration` in pool state.
+
+- Remove `subjected_to_bootstrap_liquidity_locking` in position state.
+
+- With PairType as `Permission` and `CustomizablePermissionless`, `token_y_mint` is always quote token (SOL/USDC). Users are able to deposit both quote token and base token before `activation_slot`, but those pools doesn't allow user to deposit quote token in active_bin before `activation_slot`. After `activation_slot`, that are free for everyone.
+
+- `PairType::Permission` allows user to withdraw base token before `activation_slot`, but `PairType::CustomizablePermissionless` doesn't allow user to withdraw base token before `activation_slot`
+
+- Refactoring on file structures
+
+### Removed
+
+- Remove endpoint `set_lock_release_point`
+- Remove endpoint `update_whitelisted_address`
+
+### Breaking Changes
+
+- Endpoint `initialize_position_by_operator` requires a new field `lock_release_point`, to allow position liquidity locking for compatibility with old launch mechanism in permissioned lb pair
+
+## @meteora-ag/dlmm [1.3.0] - PR #115
+
+### Added
+
+- Add `createCustomizablePermissionlessLbPair` to allow user to create launch pool with more flexible configuration.
+
+### Removed
+
+- Remove `updateWhitelistedWallet`
+
+### Breaking Changes
+
+- `createPermissionLbPair` removed `lockDuration`
+- `initializePositionByOperator` added `lockReleasePoint`
+- `seedLiquidity` removed `operator` and `feeOwner`
+
+## cli [0.4.0] - PR #115
+
+### Added
+
+- Add `initialize_customizable_permission_lb_pair`
+
+### Removed
+
+- Remove `update_whitelisted_wallet`
+
+## @meteora-ag/dlmm [1.2.4] - PR #119
+
+### Fixed
+
+- Refactor `getBins` to work with any bin ranges
+
+## @meteora-ag/dlmm [1.2.3] - PR #112
+
+### Fixed
+
+- Fixed `addLiquidityByStrategy` incorrect array bin indices calculation
+
+## @meteora-ag/dlmm [1.2.2] - PR #110
+
+### Fixed
+
+- Fixed `quoteCreatePosition` incorrect result if bin range too short
+
+## @meteora-ag/dlmm [1.2.0] - PR #109
+
+### Removed
+
+- Removed `removeLiquiditySingleSide`
+
+## @meteora-ag/dlmm [1.1.6] - PR #108
+
+### Added
+
+- new method `createEmptyPosition` allows to create an empty position with the corresponding bin arrays.
+
 ## @meteora-ag/dlmm [1.1.5] - PR #107
 
 ### Fixed
